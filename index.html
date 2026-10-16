@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WebSocket-klient</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <h1>WebSocket klient</h1>
+
+    <!-- logged out -->
+    <section id="login-section">
+      <h2>Logga in</h2>
+      <p id="login-message"></p>
+      <form id="login-form">
+        <input id="username" type="text" placeholder="Användarnamn" required>
+        <input id="password" type="password" placeholder="Lösenord" required>
+        <button type="submit">Logga in</button>
+      </form>
+    </section>
+
+    <!-- logged in -->
+    <section id="app-section" hidden>
+      <div class="status-row">
+        <span id="status" class="status disconnected">Frånkopplad</span>
+        <button id="reconnect-btn" type="button">Återanslut</button>
+        <button id="logout-btn" type="button">Logga ut</button>
+      </div>
+
+      <textarea id="message-input" placeholder="Skriv eller klistra in text..."></textarea>
+      <button id="send-btn" type="button">Skicka</button>
+
+      <h2>Meddelanden</h2>
+      <ul id="messages"></ul>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
