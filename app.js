@@ -1,15 +1,18 @@
 // Change these two URLs when the servers are deployed
 const CONFIG = {
-  LOGIN_URL: 'http://localhost:3000/api/auth/login',
+  LOGIN_URL: 'http://localhost:3000/api/auth/login', // use your deployed login URL
   WS_URL: 'wss://websocket-server-npvo.onrender.com'
 };
 
 const TOKEN_KEY = 'jwt';
+const USERNAME_KEY = 'lastUsername'; // NEW
 
 const loginSection = document.getElementById('login-section');
 const appSection = document.getElementById('app-section');
 const loginForm = document.getElementById('login-form');
 const loginMessage = document.getElementById('login-message');
+const usernameInput = document.getElementById('username');
+const passwordInput = document.getElementById('password');
 const logoutBtn = document.getElementById('logout-btn');
 const statusEl = document.getElementById('status');
 const reconnectBtn = document.getElementById('reconnect-btn');
@@ -18,9 +21,42 @@ const sendBtn = document.getElementById('send-btn');
 const messagesEl = document.getElementById('messages');
 
 let socket = null;
+let expiryTimer = null; // NEW
 
 function getToken() {
   return localStorage.getItem(TOKEN_KEY);
+}
+
+// NEW: read the payload of a JWT (no verification, the server does that)
+function parseToken(token) {
+  try {
+    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(atob(base64));
+  } catch (err) {
+    return null;
+  }
+}
+
+// NEW: true if the token is missing a valid exp or has passed it
+function isExpired(token) {
+  const payload = parseToken(token);
+  if (!payload || typeof payload.exp !== 'number') return true;
+  return payload.exp * 1000 <= Date.now();
+}
+
+// NEW: log the user out the moment the token runs out
+function scheduleExpiry(token) {
+  clearTimeout(expiryTimer);
+  const payload = parseToken(token);
+  if (!payload || typeof payload.exp !== 'number') return;
+  const msLeft = payload.exp * 1000 - Date.now();
+  expiryTimer = setTimeout(expireSession, Math.min(Math.max(msLeft, 0), 2147483647));
+}
+
+// NEW
+function expireSession() {
+  localStorage.removeItem(TOKEN_KEY);
+  showLoggedOut('Din inloggning har gått ut. Logga in igen.');
 }
 
 function setStatus(state, text) {
@@ -28,7 +64,7 @@ function setStatus(state, text) {
   statusEl.className = `status ${state}`;
 }
 
-// Show a received message
+// Show a received message, newest first, with a copy button
 function addMessage(text) {
   const li = document.createElement('li');
 
@@ -57,13 +93,12 @@ function sendMessage() {
   if (text.trim() === '') return;
 
   if (!socket || socket.readyState !== WebSocket.OPEN) {
-    setStatus('disconnected', 'Frånkopplad  kan inte skicka');
+    setStatus('disconnected', 'Frånkopplad – kan inte skicka');
     return;
   }
 
   socket.send(text);
   messageInput.value = '';
-  // The server sends the message back to us too, so it shows up via onmessage
 }
 
 function closeSocket() {
@@ -80,6 +115,11 @@ function connect() {
     showLoggedOut();
     return;
   }
+  // NEW: never try to connect with an expired token
+  if (isExpired(token)) {
+    expireSession();
+    return;
+  }
 
   closeSocket();
   setStatus('connecting', 'Ansluter...');
@@ -94,7 +134,11 @@ function connect() {
     if (ws === socket) addMessage(event.data);
   };
   ws.onclose = () => {
-    if (ws === socket) setStatus('disconnected', 'Frånkopplad');
+    if (ws !== socket) return;
+    setStatus('disconnected', 'Frånkopplad');
+    // NEW: a closed connection with an expired token means "log in again"
+    const current = getToken();
+    if (current && isExpired(current)) expireSession();
   };
   // Browsers give no details about a failed connection; onclose follows anyway
   ws.onerror = () => {};
@@ -103,22 +147,27 @@ function connect() {
 function showLoggedIn() {
   loginSection.hidden = true;
   appSection.hidden = false;
+  scheduleExpiry(getToken()); // NEW
   connect();
 }
 
 function showLoggedOut(message = '') {
+  clearTimeout(expiryTimer); // NEW
   closeSocket();
   loginSection.hidden = false;
   appSection.hidden = true;
   loginMessage.textContent = message;
+  // NEW: prefill the last username so only the password is needed
+  usernameInput.value = localStorage.getItem(USERNAME_KEY) || '';
+  (usernameInput.value ? passwordInput : usernameInput).focus();
 }
 
 loginForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   loginMessage.textContent = '';
 
-  const username = document.getElementById('username').value.trim();
-  const password = document.getElementById('password').value;
+  const username = usernameInput.value.trim();
+  const password = passwordInput.value;
 
   try {
     const response = await fetch(CONFIG.LOGIN_URL, {
@@ -134,6 +183,7 @@ loginForm.addEventListener('submit', async (event) => {
     }
 
     localStorage.setItem(TOKEN_KEY, data.token);
+    localStorage.setItem(USERNAME_KEY, username); // NEW (the password is never stored)
     loginForm.reset();
     showLoggedIn();
   } catch (err) {
@@ -159,9 +209,12 @@ logoutBtn.addEventListener('click', () => {
   showLoggedOut();
 });
 
-// On page load: stay logged in if a token is stored
-if (getToken()) {
+// On page load: stay logged in only if there is a token that hasn't expired
+const storedToken = getToken();
+if (storedToken && !isExpired(storedToken)) {
   showLoggedIn();
+} else if (storedToken) {
+  expireSession(); // NEW: stale token from an earlier visit
 } else {
   showLoggedOut();
 }
