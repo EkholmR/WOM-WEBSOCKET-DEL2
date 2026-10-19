@@ -64,15 +64,22 @@ function setStatus(state, text) {
   statusEl.className = `status ${state}`;
 }
 
-// Show a received message, newest first, with a copy button
+
+// Show a received message, newest first, with the arrival time and a copy button
 function addMessage(text) {
   const li = document.createElement('li');
 
   const span = document.createElement('span');
+  span.className = 'msg-text';
   span.textContent = text; // textContent, so received text is never run as HTML
+
+  const time = document.createElement('time');
+  time.className = 'msg-time';
+  time.textContent = new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
 
   const copyBtn = document.createElement('button');
   copyBtn.type = 'button';
+  copyBtn.className = 'copy-btn';
   copyBtn.textContent = 'Kopiera';
   copyBtn.addEventListener('click', async () => {
     try {
@@ -84,9 +91,10 @@ function addMessage(text) {
     setTimeout(() => { copyBtn.textContent = 'Kopiera'; }, 1500);
   });
 
-  li.append(span, copyBtn);
+  li.append(span, copyBtn, time);
   messagesEl.prepend(li);
 }
+
 
 function sendMessage() {
   const text = messageInput.value;
