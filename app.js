@@ -1,6 +1,6 @@
 // Change these two URLs when the servers are deployed
 const CONFIG = {
-  LOGIN_URL: 'http://localhost:3000/api/auth/login', // use your deployed login URL
+  LOGIN_URL: 'https://wom-p2-del3.onrender.com/api/auth/login', // use your deployed login URL
   WS_URL: 'wss://websocket-server-npvo.onrender.com'
 };
 
